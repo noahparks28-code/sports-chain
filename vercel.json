@@ -1,3 +1,7 @@
-{
-  "version": 2
+son{
+  "version": 2,
+  "rewrites": [
+    { "source": "/api/validate", "destination": "/api/validate.js" },
+    { "source": "/(.*)", "destination": "/public/$1" }
+  ]
 }
