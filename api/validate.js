@@ -9,7 +9,13 @@ module.exports = async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { prevEntry, currentEntry } = req.body;
+  let body = req.body;
+  if (typeof body === "string") {
+    try { body = JSON.parse(body); } catch { return res.status(400).json({ valid: false, reason: "Invalid request." }); }
+  }
+
+  const { prevEntry, currentEntry } = body || {};
+  if (!currentEntry) return res.status(400).json({ valid: false, reason: "Missing data." });
 
   let prompt = "";
 
@@ -42,7 +48,7 @@ module.exports = async function handler(req, res) {
     const result = JSON.parse(text);
     return res.status(200).json(result);
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ valid: false, reason: "Validation error. Try again." });
+    console.error("Anthropic error:", err.message);
+    return res.status(500).json({ valid: false, reason: `Error: ${err.message}` });
   }
 };
