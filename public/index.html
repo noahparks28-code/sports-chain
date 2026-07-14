@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chain Game 🏀🏈</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { min-height: 100vh; background: #020617; font-family: 'Inter', system-ui, sans-serif; color: #f1f5f9; display: flex; align-items: flex-start; justify-content: center; padding: 24px 16px; }
+    #app { width: 100%; max-width: 480px; }
+    .card { background: #0f172a; border-radius: 20px; padding: 28px 24px; box-shadow: 0 25px 60px rgba(0,0,0,0.6); }
+    h1 { font-size: 32px; font-weight: 900; letter-spacing: 1px; color: #f1f5f9; }
+    .sub { color: #64748b; font-size: 14px; margin-top: 6px; }
+    .label { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+    input { background: #1e293b; border: 1.5px solid #334155; border-radius: 10px; padding: 10px 14px; color: #f1f5f9; font-size: 15px; outline: none; width: 100%; }
+    input:disabled { opacity: 0.5; }
+    .btn-primary { width: 100%; background: #3b82f6; color: #fff; border: none; border-radius: 12px; padding: 14px; font-size: 16px; font-weight: 700; cursor: pointer; transition: opacity 0.2s; }
+    .btn-primary:disabled { opacity: 0.4; cursor: default; }
+    .btn-secondary { width: 100%; background: transparent; border: 1.5px solid #334155; color: #94a3b8; border-radius: 10px; padding: 8px 16px; font-size: 14px; cursor: pointer; }
+    .btn-icon { background: transparent; border: none; color: #475569; font-size: 16px; cursor: pointer; padding: 4px 8px; }
+    .player-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+    .dot { width: 32px; height: 32px; border-radius: 50%; background: #1e293b; color: #64748b; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+    .rules-box { background: #020617; border: 1px solid #1e293b; border-radius: 12px; padding: 14px 16px; margin-top: 24px; }
+    .rules-box p { font-size: 13px; color: #cbd5e1; margin: 4px 0; }
+    .current-player-box { background: #020617; border-radius: 12px; padding: 14px 18px; margin-bottom: 20px; border-left: 4px solid #3b82f6; }
+    .current-player-name { font-size: 26px; font-weight: 800; color: #f1f5f9; }
+    .type-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .type-btn { border: 1.5px solid #334155; border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer; background: #1e293b; color: #94a3b8; transition: all 0.15s; }
+    .type-btn.selected { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+    .feedback { padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; font-size: 14px; }
+    .feedback.ok { background: #14532d; color: #86efac; }
+    .feedback.err { background: #450a0a; color: #fca5a5; }
+    .feedback.checking { background: #1e3a5f; color: #93c5fd; }
+    .chain-wrap { margin-bottom: 18px; }
+    .chain-scroll { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .badge { border-radius: 10px; padding: 6px 12px; font-size: 13px; font-weight: 600; display: inline-flex; flex-direction: column; gap: 2px; max-width: 200px; text-align: center; }
+    .badge-label { font-size: 10px; opacity: 0.75; text-transform: uppercase; letter-spacing: 1px; }
+    .badge-value { font-size: 15px; }
+    .badge.team { background: #1d4ed8; color: #bfdbfe; }
+    .badge.player { background: #7c3aed; color: #ede9fe; }
+    .badge.number { background: #b45309; color: #fef3c7; }
+    .badge.college { background: #065f46; color: #d1fae5; }
+    .badge.dim { opacity: 0.4; }
+    .arrow { color: #475569; }
+    .turn-order { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 20px; }
+    .turn-chip { font-size: 12px; padding: 4px 10px; border-radius: 20px; background: #1e293b; color: #64748b; }
+    .turn-chip.active { background: #1d4ed8; color: #fff; font-weight: 700; }
+    .timer-wrap { position: relative; width: 72px; height: 72px; }
+    .timer-num { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 800; }
+    .winner-card { text-align: center; }
+    .trophy { font-size: 64px; margin-bottom: 8px; }
+    .winner-name { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+    .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const TURN_SECONDS = 60;
+const CHAIN_LABELS = { team: "🏀🏈 Team", player: "👤 Player", number: "# Jersey Number", college: "🎓 College" };
+
+let state = { screen: "lobby", players: [], active: [], idx: 0, chain: [], timeLeft: TURN_SECONDS, phase: "playing", feedback: null, winner: null, elim: [] };
+let timerInterval = null;
+let lobbyNames = ["", ""];
+let selectedType = null;
+let inputVal = "";
+
+function render() {
+  const app = document.getElementById("app");
+  if (state.screen === "lobby") app.innerHTML = renderLobby();
+  else if (state.screen === "game") app.innerHTML = renderGame();
+  else if (state.screen === "winner") app.innerHTML = renderWinner();
+  bindEvents();
+}
+
+function renderLobby() {
+  const rows = lobbyNames.map((n, i) => `
+    <div class="player-row">
+      <div class="dot">${i + 1}</div>
+      <input type="text" class="lobby-name" data-idx="${i}" placeholder="Player ${i + 1}" value="${n}" maxlength="20" />
+      ${lobbyNames.length > 2 ? `<button class="btn-icon remove-player" data-idx="${i}">✕</button>` : ""}
+    </div>`).join("");
+  const canStart = lobbyNames.every(n => n.trim());
+  return `
+    <div class="card">
+      <div style="text-align:center;margin-bottom:28px">
+        <div style="font-size:48px;margin-bottom:8px">🏀🏈</div>
+        <h1>Chain Game</h1>
+        <p class="sub">NBA & NFL trivia — connect the chain or get eliminated</p>
+      </div>
+      <div class="label">Players</div>
+      ${rows}
+      ${lobbyNames.length < 6 ? `<button class="btn-secondary" id="add-player">+ Add Player</button>` : ""}
+      <div class="rules-box">
+        <p style="font-weight:700;color:#94a3b8;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">How to Play</p>
+        <p>1. First player names any NBA or NFL team (e.g. "Knicks", "Chiefs")</p>
+        <p>2. Next names a player from that team</p>
+        <p>3. Next links by: another team, jersey #, or college</p>
+        <p>4. Wrong answer or time runs out = eliminated. Last one standing wins!</p>
+      </div>
+      <button class="btn-primary" id="start-game" style="margin-top:24px" ${canStart ? "" : "disabled"}>Start Game</button>
+    </div>`;
+}
+
+function allowedTypes() {
+  const last = state.chain[state.chain.length - 1];
+  if (!last) return ["team"];
+  if (last.type === "team") return ["player"];
+  if (last.type === "player") return ["team", "number", "college"];
+  return ["player"];
+}
+
+function renderTimer() {
+  const pct = state.timeLeft / TURN_SECONDS;
+  const color = pct > 0.5 ? "#22c55e" : pct > 0.25 ? "#f59e0b" : "#ef4444";
+  const circ = 2 * Math.PI * 28;
+  const offset = circ * (1 - pct);
+  return `
+    <div class="timer-wrap">
+      <svg width="72" height="72" style="transform:rotate(-90deg)">
+        <circle cx="36" cy="36" r="28" fill="none" stroke="#1e293b" stroke-width="5"/>
+        <circle cx="36" cy="36" r="28" fill="none" stroke="${color}" stroke-width="5"
+          stroke-dasharray="${circ}" stroke-dashoffset="${offset}" stroke-linecap="round"
+          style="transition:stroke-dashoffset 1s linear,stroke 0.3s"/>
+      </svg>
+      <div class="timer-num" style="color:${color}">${state.timeLeft}</div>
+    </div>`;
+}
+
+function renderChain() {
+  if (!state.chain.length) return "";
+  const recent = state.chain.slice(-4);
+  const badges = recent.map((e, i, arr) => {
+    const dim = i < arr.length - 1 ? " dim" : "";
+    return `<span style="display:flex;align-items:center;gap:6px">
+      <span class="badge ${e.type}${dim}">
+        <span class="badge-label">${CHAIN_LABELS[e.type]}</span>
+        <span class="badge-value">${e.value}</span>
+      </span>
+      ${i < arr.length - 1 ? `<span class="arrow">→</span>` : ""}
+    </span>`;
+  }).join("");
+  const extra = state.chain.length > 4 ? `<span style="color:#475569;font-size:12px">+${state.chain.length - 4} earlier</span>` : "";
+  return `<div class="chain-wrap"><div class="label">Chain</div><div class="chain-scroll">${badges}${extra}</div></div>`;
+}
+
+function renderGame() {
+  const allowed = allowedTypes();
+  if (allowed.length === 1 && selectedType !== allowed[0]) selectedType = allowed[0];
+  const last = state.chain[state.chain.length - 1];
+  const player = state.active[state.idx];
+  const canSubmit = inputVal.trim() && selectedType && state.phase === "playing";
+  const typeBtns = allowed.length > 1 ? `<div class="type-btns">${allowed.map(t => `<button class="type-btn${selectedType === t ? " selected" : ""}" data-type="${t}">${CHAIN_LABELS[t]}</button>`).join("")}</div>` : "";
+  const placeholder = selectedType === "team" ? "e.g. Knicks, Chiefs, Lakers" : selectedType === "player" ? "e.g. Jalen Brunson, Patrick Mahomes" : selectedType === "number" ? "e.g. 23" : selectedType === "college" ? "e.g. Duke, Kentucky, Michigan" : "Pick a type above first";
+  const feedbackHtml = state.feedback ? `<div class="feedback ${state.phase === "checking" ? "checking" : state.feedback.ok ? "ok" : "err"}">${state.phase === "checking" ? "⏳ Checking…" : (state.feedback.ok ? "✓ " : "✗ ") + state.feedback.msg}</div>` : "";
+  const turnChips = state.active.map((p, i) => `<div class="turn-chip${i === state.idx ? " active" : ""}">${p}</div>`).join("");
+  return `
+    <div class="card">
+      <div class="header-row">
+        <div>
+          <div class="label" style="margin-bottom:2px">Round 1</div>
+          <div style="font-size:13px;color:#94a3b8">${state.active.length} players left</div>
+        </div>
+        ${renderTimer()}
+      </div>
+      <div class="current-player-box">
+        <div class="label" style="margin-bottom:4px">It's your turn</div>
+        <div class="current-player-name">${player}</div>
+      </div>
+      ${renderChain()}
+      <div style="margin-bottom:14px">
+        <div class="label">${last ? `Link from: ${last.value}` : "Start the chain"}</div>
+        ${typeBtns}
+        <input type="text" id="answer-input" placeholder="${placeholder}" value="${inputVal}" ${state.phase !== "playing" ? "disabled" : ""} />
+      </div>
+      ${feedbackHtml}
+      <button class="btn-primary" id="submit-btn" ${canSubmit ? "" : "disabled"}>Submit Answer</button>
+      <div style="margin-top:20px">
+        <div class="label">Turn order</div>
+        <div class="turn-order">${turnChips}</div>
+      </div>
+    </div>`;
+}
+
+function renderWinner() {
+  return `
+    <div class="card winner-card">
+      <div class="trophy">🏆</div>
+      <h1 style="font-size:36px;margin-bottom:4px">Champion!</h1>
+      <div class="winner-name">${state.winner}</div>
+      <p style="color:#64748b;margin:8px 0 32px">Last one standing wins the chain game.</p>
+      <button class="btn-primary" id="play-again">Play Again</button>
+    </div>`;
+}
+
+function bindEvents() {
+  document.querySelectorAll(".lobby-name").forEach(el => {
+    el.addEventListener("input", e => {
+      lobbyNames[+e.target.dataset.idx] = e.target.value;
+      const canStart = lobbyNames.every(n => n.trim());
+      const btn = document.getElementById("start-game");
+      if (btn) btn.disabled = !canStart;
+    });
+  });
+  document.querySelectorAll(".remove-player").forEach(el => {
+    el.addEventListener("click", e => { lobbyNames = lobbyNames.filter((_, j) => j !== +e.target.dataset.idx); render(); });
+  });
+  document.getElementById("add-player")?.addEventListener("click", () => { if (lobbyNames.length < 6) { lobbyNames.push(""); render(); } });
+  document.getElementById("start-game")?.addEventListener("click", () => {
+    const names = lobbyNames.map(n => n.trim()).filter(Boolean);
+    state = { ...state, players: names, active: [...names], idx: 0, chain: [], elim: [], phase: "playing", feedback: null, timeLeft: TURN_SECONDS, screen: "game", winner: null };
+    selectedType = null; inputVal = "";
+    render(); startTimer();
+  });
+  document.querySelectorAll(".type-btn").forEach(el => {
+    el.addEventListener("click", e => { selectedType = e.target.dataset.type; render(); document.getElementById("answer-input")?.focus(); });
+  });
+  const answerInput = document.getElementById("answer-input");
+  if (answerInput) {
+    answerInput.addEventListener("input", e => { inputVal = e.target.value; });
+    answerInput.addEventListener("keydown", e => { if (e.key === "Enter") submitAnswer(); });
+    answerInput.focus();
+  }
+  document.getElementById("submit-btn")?.addEventListener("click", submitAnswer);
+  document.getElementById("play-again")?.addEventListener("click", () => {
+    state.screen = "lobby"; state.winner = null;
+    lobbyNames = state.players.map(() => "");
+    render();
+  });
+}
+
+function startTimer() {
+  clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    if (state.phase !== "playing") return;
+    state.timeLeft--;
+    updateTimerDisplay();
+    if (state.timeLeft <= 0) {
+      clearInterval(timerInterval);
+      state.feedback = { ok: false, msg: `⏱ Time's up! ${state.active[state.idx]} is eliminated.` };
+      state.phase = "done";
+      render();
+      setTimeout(() => eliminate(state.idx), 2000);
+    }
+  }, 1000);
+}
+
+function updateTimerDisplay() {
+  const pct = state.timeLeft / TURN_SECONDS;
+  const color = pct > 0.5 ? "#22c55e" : pct > 0.25 ? "#f59e0b" : "#ef4444";
+  const circ = 2 * Math.PI * 28;
+  const circle = document.querySelector(".timer-wrap circle:last-child");
+  const num = document.querySelector(".timer-num");
+  if (circle) { circle.setAttribute("stroke-dashoffset", circ * (1 - pct)); circle.setAttribute("stroke", color); }
+  if (num) { num.textContent = state.timeLeft; num.style.color = color; }
+}
+
+async function submitAnswer() {
+  if (!inputVal.trim() || !selectedType || state.phase !== "playing") return;
+  clearInterval(timerInterval);
+  const entry = { type: selectedType, value: inputVal.trim() };
+  const prevEntry = state.chain[state.chain.length - 1] || null;
+  state.phase = "checking";
+  state.feedback = { ok: true, msg: "" };
+  render();
+  let result;
+  try {
+    const res = await fetch("/api/validate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prevEntry, currentEntry: entry }),
+    });
+    result = await res.json();
+  } catch {
+    result = { valid: false, reason: "Network error. Try again." };
+  }
+  state.feedback = { ok: result.valid, msg: result.reason };
+  state.phase = "done";
+  render();
+  if (result.valid) {
+    setTimeout(() => {
+      state.chain.push(entry);
+      state.idx = (state.idx + 1) % state.active.length;
+      state.phase = "playing"; state.feedback = null; state.timeLeft = TURN_SECONDS;
+      selectedType = null; inputVal = "";
+      render(); startTimer();
+    }, 1300);
+  } else {
+    setTimeout(() => eliminate(state.idx), 2200);
+  }
+}
+
+function eliminate(elimIdx) {
+  state.elim.push(state.active[elimIdx]);
+  state.active = state.active.filter((_, i) => i !== elimIdx);
+  if (state.active.length === 1) {
+    state.winner = state.active[0]; state.screen = "winner";
+    clearInterval(timerInterval); render(); return;
+  }
+  state.idx = elimIdx % state.active.length;
+  state.chain = []; state.phase = "playing"; state.feedback = null; state.timeLeft = TURN_SECONDS;
+  selectedType = null; inputVal = "";
+  render(); startTimer();
+}
+
+render();
+</script>
+</body>
+</html>
